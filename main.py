@@ -11,7 +11,7 @@ API_TOKEN = ""
 
 
 class Issue(BaseModel):
-    id: str
+    issue_id: str
     summary: str
     description: Optional[str]
     project: str
@@ -47,7 +47,7 @@ def parse_time_string(time_string):
     return timedelta(**time_kwargs)
 
 
-def get_tasks():
+def get_issues():
     headers = {
         'Authorization': f'Bearer {API_TOKEN}',
         'Accept': 'application/json'
@@ -90,23 +90,10 @@ def get_tasks():
                 # Parse estimation and time spent, calculate the difference
                 estimation_timedelta = parse_time_string(estimation)
                 time_spent_timedelta = parse_time_string(time_spent)
-                time_difference = estimation_timedelta - time_spent_timedelta
-
-                print(f"Issue ID: {issue_id}")
-                print(f"Summary: {summary}")
-                print(f"Description: {description}")
-                print(f"Project: {project}")
-                print(f"Reporter: {reporter}")
-                print(f"Status: {status}")
-                print(f"Start Date: {start_date}")
-                print(f"Estimation: {estimation}")
-                print(f"Time Spent: {time_spent}")
-                print(f"Time Difference: {time_difference}")
-                print('-' * 20)
 
                 all_issues.append(
                     Issue(
-                        id=issue_id,
+                        issue_id=issue_id,
                         summary=summary,
                         description=description,
                         project=project,
@@ -127,21 +114,79 @@ def get_tasks():
     return all_issues
 
 
+def make_migrations(conn):
+    cur = conn.cursor()
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS issues (
+            id SERIAL PRIMARY KEY,
+            issue_id VARCHAR(50) NOT NULL,
+            summary VARCHAR(255) NOT NULL,
+            description TEXT,
+            project VARCHAR(50) NOT NULL,
+            reporter VARCHAR(50) NOT NULL,
+            status VARCHAR(50),
+            start_date TIMESTAMP,
+            estimation INTERVAL,
+            time_spent INTERVAL,
+            CONSTRAINT unique_issue_id UNIQUE (issue_id)
+        );
+        """)
+
+    conn.commit()
+    cur.close()
+
+
+def insert_into_postgres(conn, issues):
+    cur = conn.cursor()
+
+    upsert_query = """
+        INSERT INTO issues (issue_id, summary, description, project, reporter, status, start_date, estimation, time_spent)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (issue_id) DO UPDATE SET
+            summary = EXCLUDED.summary,
+            description = EXCLUDED.description,
+            project = EXCLUDED.project,
+            reporter = EXCLUDED.reporter,
+            status = EXCLUDED.status,
+            start_date = EXCLUDED.start_date,
+            estimation = EXCLUDED.estimation,
+            time_spent = EXCLUDED.time_spent
+    """
+
+    for issue in issues:
+        data_tuple = (
+            issue.issue_id,
+            issue.summary,
+            issue.description,
+            issue.project,
+            issue.reporter,
+            issue.status,
+            issue.start_date,
+            issue.estimation,
+            issue.time_spent
+        )
+
+        cur.execute(upsert_query, data_tuple)
+
+    conn.commit()
+    cur.close()
+
 def main():
-    # print("Connecting to Postgres...")
-    # conn = psycopg2.connect(user=os.environ["POSTGRES_USER"], password=os.environ["POSTGRES_PASSWORD"],
-    #                         database=os.environ["POSTGRES_DATABASE"], host=os.environ["POSTGRES_HOST"],
-    #                         port=os.environ["POSTGRES_PORT"])
-    #
-    # print("Running migrations...")
-    # make_migrations(conn)
+    print("Connecting to Postgres...")
+    conn = psycopg2.connect(user=os.environ["POSTGRES_USER"], password=os.environ["POSTGRES_PASSWORD"],
+                            database=os.environ["POSTGRES_DATABASE"], host=os.environ["POSTGRES_HOST"],
+                            port=os.environ["POSTGRES_PORT"])
+
+    print("Running migrations...")
+    make_migrations(conn)
 
     print(f"Getting issues...")
-    tasks = get_tasks()
-    #
-    # insert_into_postgres(conn, tasks)
-    #
-    # conn.close()
+    issues = get_issues()
+
+    insert_into_postgres(conn, issues)
+
+    conn.close()
 
 
 if __name__ == "__main__":
