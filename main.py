@@ -81,6 +81,10 @@ def get_issues():
                 status = get_custom_field_value(issue.get('customFields', []), 'Статус DEV')
                 estimation = get_custom_field_value(issue.get('customFields', []), 'Оценка')
                 time_spent = get_custom_field_value(issue.get('customFields', []), 'Реально затраченное время')
+                task_area = get_custom_field_value(issue.get('customFields', []), 'Область задачи')
+
+                if task_area != 'Разработка':
+                    continue
 
                 start_date_timestamp = get_custom_field_value(issue.get('customFields', []), 'Дата начала')
                 start_date = datetime.fromtimestamp(int(start_date_timestamp) / 1000) if isinstance(
@@ -171,6 +175,7 @@ def insert_into_postgres(conn, issues):
 
     conn.commit()
     cur.close()
+
 
 def main():
     print("Connecting to Postgres...")
