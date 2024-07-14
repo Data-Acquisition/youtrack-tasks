@@ -4,5 +4,5 @@
 1. Перейти в ~/important/youtrack-tasks/
 2. Запустить скрипт run.sh
 
-## Содержимое БД grafana-sales
+## Содержимое БД grafana_sales
 - таблица *issues* с информацией по всем задачам
